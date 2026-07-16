@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="">
+    <entry name="UsApps" type="String">
+      <label>Apps that use the US layout</label>
+      <default>konsole,kitty,alacritty,wezterm,ghostty,code,cursor,kate,org.kde.kate,jetbrains-idea,jetbrains-webstorm</default>
+    </entry>
+    <entry name="DefaultLayout" type="String">
+      <label>Default layout short name</label>
+      <default>tr</default>
+    </entry>
+    <entry name="UsLayout" type="String">
+      <label>US layout short name</label>
+      <default>us</default>
+    </entry>
+  </group>
+</kcfg>

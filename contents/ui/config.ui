@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>KWin::KeyboardLayoutSwitcherConfigForm</class>
+ <widget class="QWidget" name="KWin::KeyboardLayoutSwitcherConfigForm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>420</width>
+    <height>320</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Keyboard Layout Switcher</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="usAppsLabel">
+     <property name="text">
+      <string>US layout apps (one resourceClass per line, or comma-separated)</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="kcfg_UsApps">
+     <property name="plainText">
+      <string>konsole
+kitty
+alacritty
+wezterm
+ghostty
+code
+cursor
+kate
+org.kde.kate
+jetbrains-idea
+jetbrains-webstorm</string>
+     </property>
+     <property name="placeholderText">
+      <string>e.g. konsole&#xa;code&#xa;firefox</string>
+     </property>
+     <property name="tabChangesFocus">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="defaultLayoutLabel">
+       <property name="text">
+        <string>Default layout</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="kcfg_DefaultLayout">
+       <property name="text">
+        <string>tr</string>
+       </property>
+       <property name="placeholderText">
+        <string>tr</string>
+       </property>
+       <property name="toolTip">
+        <string>XKB short name (must match a configured layout)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="usLayoutLabel">
+       <property name="text">
+        <string>US layout</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="kcfg_UsLayout">
+       <property name="text">
+        <string>us</string>
+       </property>
+       <property name="placeholderText">
+        <string>us</string>
+       </property>
+       <property name="toolTip">
+        <string>XKB short name (must match a configured layout)</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="hintLabel">
+     <property name="text">
+      <string>Tip: find a window's resourceClass via System Settings → Window Management → Window Rules → Detect Window Properties.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
