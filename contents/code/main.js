@@ -2,6 +2,10 @@
     Keyboard Layout Switcher — KWin script
     Forces a configured layout (default: us) for whitelisted apps,
     otherwise restores the default layout (default: tr).
+
+    Note: org.kde.KeyboardLayouts.setLayout expects a D-Bus uint, but
+    KWin's callDBus sends JS numbers as signed int, so that call fails.
+    We switch by calling switchToNextLayout until getLayout matches.
 */
 
 const DEFAULT_US_APPS =
@@ -11,8 +15,10 @@ let usApps = {};
 let defaultLayoutName = "tr";
 let usLayoutName = "us";
 let layoutIndices = {}; // shortName -> index
+let layoutCount = 0;
 let lastAppliedIndex = -1;
 let layoutsReady = false;
+let switching = false;
 
 function parseAppList(value) {
     const apps = {};
@@ -28,15 +34,6 @@ function parseAppList(value) {
     return apps;
 }
 
-function loadConfig() {
-    usApps = parseAppList(readConfig("UsApps", DEFAULT_US_APPS));
-    defaultLayoutName = String(readConfig("DefaultLayout", "tr")).trim().toLowerCase() || "tr";
-    usLayoutName = String(readConfig("UsLayout", "us")).trim().toLowerCase() || "us";
-    refreshLayoutIndices(function () {
-        applyForWindow(workspace.activeWindow);
-    });
-}
-
 function shortNameFromEntry(entry) {
     if (entry === null || entry === undefined) {
         return "";
@@ -45,10 +42,34 @@ function shortNameFromEntry(entry) {
         return entry.toLowerCase();
     }
     if (typeof entry === "object") {
+        // Plasma 6: ["tr", "", "Turkish"] or { shortName: "tr", ... }
         const name = entry.shortName || entry.short_name || entry[0];
         return name ? String(name).toLowerCase() : "";
     }
     return String(entry).toLowerCase();
+}
+
+function applyFallbackIndices() {
+    layoutIndices = {};
+    layoutIndices[defaultLayoutName] = 0;
+    if (usLayoutName !== defaultLayoutName) {
+        layoutIndices[usLayoutName] = 1;
+    }
+    layoutCount = Object.keys(layoutIndices).length;
+}
+
+function loadConfig() {
+    usApps = parseAppList(readConfig("UsApps", DEFAULT_US_APPS));
+    defaultLayoutName = String(readConfig("DefaultLayout", "tr")).trim().toLowerCase() || "tr";
+    usLayoutName = String(readConfig("UsLayout", "us")).trim().toLowerCase() || "us";
+
+    // Ready immediately with LayoutList-order fallback (tr,us → 0,1)
+    applyFallbackIndices();
+    layoutsReady = true;
+
+    refreshLayoutIndices(function () {
+        applyForWindow(workspace.activeWindow);
+    });
 }
 
 function refreshLayoutIndices(done) {
@@ -58,27 +79,40 @@ function refreshLayoutIndices(done) {
         "org.kde.KeyboardLayouts",
         "getLayoutsList",
         function (layouts) {
-            layoutIndices = {};
-            layoutsReady = false;
+            const next = {};
+            let count = 0;
 
             if (layouts && layouts.length !== undefined) {
                 for (let i = 0; i < layouts.length; ++i) {
                     const name = shortNameFromEntry(layouts[i]);
                     if (name) {
-                        layoutIndices[name] = i;
+                        next[name] = i;
+                        count += 1;
                     }
                 }
             }
 
-            // Fallback for common tr,us ordering when DBus parsing fails
-            if (Object.keys(layoutIndices).length === 0) {
-                layoutIndices[defaultLayoutName] = 0;
-                if (usLayoutName !== defaultLayoutName) {
-                    layoutIndices[usLayoutName] = 1;
-                }
+            if (count > 0) {
+                layoutIndices = next;
+                layoutCount = count;
+            } else {
+                applyFallbackIndices();
             }
 
             layoutsReady = true;
+            print(
+                "keyboard-layout-switcher: layouts ready count=" +
+                    layoutCount +
+                    " default=" +
+                    defaultLayoutName +
+                    "@" +
+                    indexForLayout(defaultLayoutName) +
+                    " us=" +
+                    usLayoutName +
+                    "@" +
+                    indexForLayout(usLayoutName)
+            );
+
             if (typeof done === "function") {
                 done();
             }
@@ -88,23 +122,78 @@ function refreshLayoutIndices(done) {
 
 function indexForLayout(name) {
     const key = String(name || "").toLowerCase();
-    if (layoutIndices.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(layoutIndices, key)) {
         return layoutIndices[key];
     }
     return -1;
 }
 
-function setLayoutIndex(index) {
-    if (index < 0 || index === lastAppliedIndex) {
+function setLayoutIndex(targetIndex) {
+    if (targetIndex < 0 || switching) {
         return;
     }
-    lastAppliedIndex = index;
+    if (targetIndex === lastAppliedIndex) {
+        return;
+    }
+
+    switching = true;
     callDBus(
         "org.kde.keyboard",
         "/Layouts",
         "org.kde.KeyboardLayouts",
-        "setLayout",
-        index
+        "getLayout",
+        function (current) {
+            let cur = Number(current);
+            if (cur === targetIndex) {
+                lastAppliedIndex = targetIndex;
+                switching = false;
+                return;
+            }
+
+            const maxSteps = Math.max(layoutCount, 2) + 1;
+            let steps = 0;
+
+            function step() {
+                if (steps >= maxSteps) {
+                    print(
+                        "keyboard-layout-switcher: failed to reach layout index " +
+                            targetIndex
+                    );
+                    switching = false;
+                    return;
+                }
+                steps += 1;
+                callDBus(
+                    "org.kde.keyboard",
+                    "/Layouts",
+                    "org.kde.KeyboardLayouts",
+                    "switchToNextLayout",
+                    function () {
+                        callDBus(
+                            "org.kde.keyboard",
+                            "/Layouts",
+                            "org.kde.KeyboardLayouts",
+                            "getLayout",
+                            function (value) {
+                                cur = Number(value);
+                                if (cur === targetIndex) {
+                                    lastAppliedIndex = targetIndex;
+                                    switching = false;
+                                    print(
+                                        "keyboard-layout-switcher: switched to index " +
+                                            targetIndex
+                                    );
+                                } else {
+                                    step();
+                                }
+                            }
+                        );
+                    }
+                );
+            }
+
+            step();
+        }
     );
 }
 
@@ -112,7 +201,6 @@ function isSpecialWindow(window) {
     if (!window) {
         return true;
     }
-    // Ignore panels, desktop, and other non-normal windows
     if (window.desktopWindow || window.dock || window.toolbar || window.menu || window.splash) {
         return true;
     }
@@ -122,11 +210,21 @@ function isSpecialWindow(window) {
     return false;
 }
 
-function shouldUseUsLayout(window) {
+function windowMatchesUsApps(window) {
     const resourceClass = window.resourceClass
         ? String(window.resourceClass).toLowerCase()
         : "";
-    return resourceClass.length > 0 && usApps.hasOwnProperty(resourceClass);
+    const resourceName = window.resourceName
+        ? String(window.resourceName).toLowerCase()
+        : "";
+
+    if (resourceClass && Object.prototype.hasOwnProperty.call(usApps, resourceClass)) {
+        return true;
+    }
+    if (resourceName && Object.prototype.hasOwnProperty.call(usApps, resourceName)) {
+        return true;
+    }
+    return false;
 }
 
 function applyForWindow(window) {
@@ -134,7 +232,8 @@ function applyForWindow(window) {
         return;
     }
 
-    const targetName = shouldUseUsLayout(window) ? usLayoutName : defaultLayoutName;
+    const useUs = windowMatchesUsApps(window);
+    const targetName = useUs ? usLayoutName : defaultLayoutName;
     const index = indexForLayout(targetName);
     if (index < 0) {
         print(
@@ -144,6 +243,16 @@ function applyForWindow(window) {
         );
         return;
     }
+
+    print(
+        "keyboard-layout-switcher: focus class=" +
+            window.resourceClass +
+            " -> " +
+            targetName +
+            " (" +
+            index +
+            ")"
+    );
     setLayoutIndex(index);
 }
 
@@ -151,6 +260,7 @@ function onWindowActivated(window) {
     applyForWindow(window);
 }
 
+print("keyboard-layout-switcher: loading");
 loadConfig();
 workspace.windowActivated.connect(onWindowActivated);
 
