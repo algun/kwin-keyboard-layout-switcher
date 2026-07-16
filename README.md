@@ -2,25 +2,27 @@
 
 KWin script for KDE Plasma 6 that switches the keyboard layout based on the active application:
 
-- **Whitelisted apps** → US layout (`us`)
-- **Everything else** → default layout (`tr`)
+- **Listed apps** → alternative layout (e.g. `us`)
+- **Everything else** → default layout (e.g. `de`, `tr`, `fr`, …)
 
-The US-app list is editable from System Settings — no code changes or reinstall needed.
+Configure the app list and layout short names from System Settings — no code edits required.
 
 ## Prerequisites
 
 1. Plasma / KWin 6
-2. Both layouts configured under **System Settings → Keyboard → Layouts** (e.g. `tr` and `us`)
+2. At least two layouts under **System Settings → Keyboard → Layouts**
 3. Set **Switching Policy** to **Global**  
    (Application/Window policy remembers layouts per app and can fight this script)
 
-Your `~/.config/kxkbrc` should look roughly like:
+Example `~/.config/kxkbrc`:
 
 ```ini
 [Layout]
-LayoutList=tr,us
+LayoutList=de,us
 Use=true
 ```
+
+If you leave the layout fields empty in the script config, the **first** layout is treated as default and the **second** as alternative.
 
 ## Install
 
@@ -45,42 +47,44 @@ kwriteconfig6 --file kwinrc --group Plugins --key keyboard-layout-switcherEnable
 qdbus6 org.kde.KWin /KWin reconfigure
 ```
 
-Then confirm it is enabled under **System Settings → Window Management → KWin Scripts**.
+Then enable it under **System Settings → Window Management → KWin Scripts**.
 
-## Configure US apps
+## Configure
 
-1. Open **System Settings → Window Management → KWin Scripts**
-2. Select **Keyboard Layout Switcher**
-3. Click **Configure**
-4. Edit the list (one `resourceClass` per line, or comma-separated)
-5. Optionally change the default / US layout short names
-6. Apply — the script reloads the list automatically
+1. **System Settings → Window Management → KWin Scripts**
+2. Select **Keyboard Layout Switcher → Configure**
+3. Add window classes that should use the **alternative** layout
+4. Optionally set default / alternative layout short names (XKB names like `us`, `de`, `tr`)
+5. Apply — the script reloads automatically
 
 ### Finding a window's `resourceClass`
 
 1. **System Settings → Window Management → Window Rules → Add New → Detect Window Properties**
 2. Click the target window
-3. Use the **Window class** value (lowercase) in the US apps list
+3. Use the **Window class** value (usually lowercase) in the app list
 
-You can also inspect active windows from a KWin console (`plasma-interactiveconsole --kwin`):
+Or from a KWin console (`plasma-interactiveconsole --kwin`):
 
 ```javascript
 print(workspace.activeWindow.resourceClass)
 ```
 
-## Defaults
-
-Out of the box, these classes use the US layout:
-
-`konsole`, `kitty`, `alacritty`, `wezterm`, `ghostty`, `code`, `cursor`, `kate`, `org.kde.kate`, `jetbrains-idea`, `jetbrains-webstorm`
-
-Default layout short name: `tr`  
-US layout short name: `us`
-
 ## Troubleshooting
 
-- **Layout never changes:** ensure both short names match entries from  
-  `qdbus6 org.kde.keyboard /Layouts org.kde.KeyboardLayouts.getLayoutsList`
+- **Layout never changes:** short names must match configured layouts:
+  ```bash
+  qdbus6 org.kde.keyboard /Layouts org.kde.KeyboardLayouts.getLayoutsList
+  ```
 - **Wrong layout sticks after focus change:** set Switching Policy to **Global**
-- **Logs:**  
-  `journalctl -f QT_CATEGORY=js QT_CATEGORY=kwin_scripting`
+- **Is the script loaded?**
+  ```bash
+  qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded keyboard-layout-switcher
+  ```
+- **Logs:**
+  ```bash
+  journalctl -f | rg keyboard-layout-switcher
+  ```
+
+## License
+
+MIT

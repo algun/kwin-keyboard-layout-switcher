@@ -3,15 +3,16 @@
     "KPlugin": {
         "Authors": [
             {
-                "Name": "algun"
+                "Name": "algun",
+                "Email": "algun.t.akgunduz@gmail.com"
             }
         ],
-        "Description": "Switches to the US keyboard layout for selected apps and back to Turkish (or your default) for everything else",
+        "Description": "Automatically switches between a default and alternative keyboard layout based on the active application",
         "Icon": "input-keyboard",
         "Id": "keyboard-layout-switcher",
         "License": "MIT",
         "Name": "Keyboard Layout Switcher",
-        "Version": "1.0",
+        "Version": "1.1.0",
         "Website": "https://github.com/algun/kwin-keyboard-layout-switcher"
     },
     "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",

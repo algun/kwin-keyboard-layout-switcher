@@ -5,17 +5,17 @@
                           http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
   <kcfgfile name=""/>
   <group name="">
-    <entry name="UsApps" type="String">
-      <label>Apps that use the US layout</label>
-      <default>konsole,kitty,alacritty,wezterm,ghostty,code,cursor,kate,org.kde.kate,jetbrains-idea,jetbrains-webstorm</default>
+    <entry name="AlternativeApps" type="String">
+      <label>Apps that use the alternative layout</label>
+      <default></default>
     </entry>
     <entry name="DefaultLayout" type="String">
-      <label>Default layout short name</label>
-      <default>tr</default>
+      <label>Default layout short name (empty = first configured layout)</label>
+      <default></default>
     </entry>
-    <entry name="UsLayout" type="String">
-      <label>US layout short name</label>
-      <default>us</default>
+    <entry name="AlternativeLayout" type="String">
+      <label>Alternative layout short name (empty = second configured layout)</label>
+      <default></default>
     </entry>
   </group>
 </kcfg>

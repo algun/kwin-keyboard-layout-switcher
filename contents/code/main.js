@@ -1,20 +1,20 @@
 /*
     Keyboard Layout Switcher — KWin script
-    Forces a configured layout (default: us) for whitelisted apps,
-    otherwise restores the default layout (default: tr).
+    Uses an alternative keyboard layout for selected apps, and the default
+    layout for everything else.
 
     Note: org.kde.KeyboardLayouts.setLayout expects a D-Bus uint, but
     KWin's callDBus sends JS numbers as signed int, so that call fails.
     We switch by calling switchToNextLayout until getLayout matches.
 */
 
-const DEFAULT_US_APPS =
-    "konsole,kitty,alacritty,wezterm,ghostty,code,cursor,kate,org.kde.kate,jetbrains-idea,jetbrains-webstorm";
+const DEFAULT_ALTERNATIVE_APPS = "";
 
-let usApps = {};
-let defaultLayoutName = "tr";
-let usLayoutName = "us";
+let alternativeApps = {};
+let defaultLayoutName = "";
+let alternativeLayoutName = "";
 let layoutIndices = {}; // shortName -> index
+let layoutNamesByIndex = [];
 let layoutCount = 0;
 let lastAppliedIndex = -1;
 let layoutsReady = false;
@@ -34,6 +34,18 @@ function parseAppList(value) {
     return apps;
 }
 
+function readConfigWithLegacy(key, legacyKey, fallback) {
+    const value = readConfig(key, "");
+    if (value !== undefined && value !== null && String(value).length > 0) {
+        return String(value);
+    }
+    const legacy = readConfig(legacyKey, "");
+    if (legacy !== undefined && legacy !== null && String(legacy).length > 0) {
+        return String(legacy);
+    }
+    return fallback;
+}
+
 function shortNameFromEntry(entry) {
     if (entry === null || entry === undefined) {
         return "";
@@ -42,30 +54,60 @@ function shortNameFromEntry(entry) {
         return entry.toLowerCase();
     }
     if (typeof entry === "object") {
-        // Plasma 6: ["tr", "", "Turkish"] or { shortName: "tr", ... }
+        // Plasma 6: ["us", "", "English (US)"] or { shortName: "us", ... }
         const name = entry.shortName || entry.short_name || entry[0];
         return name ? String(name).toLowerCase() : "";
     }
     return String(entry).toLowerCase();
 }
 
-function applyFallbackIndices() {
+function resolveLayoutNames() {
+    // Empty config fields mean "first" and "second" configured layouts
+    if (!defaultLayoutName && layoutNamesByIndex.length > 0) {
+        defaultLayoutName = layoutNamesByIndex[0];
+    }
+    if (!alternativeLayoutName && layoutNamesByIndex.length > 1) {
+        alternativeLayoutName = layoutNamesByIndex[1];
+    }
+}
+
+function applyNamedFallbackIndices() {
+    // Only used when DBus layout list is unavailable but names are known
+    if (!defaultLayoutName) {
+        return;
+    }
     layoutIndices = {};
+    layoutNamesByIndex = [];
     layoutIndices[defaultLayoutName] = 0;
-    if (usLayoutName !== defaultLayoutName) {
-        layoutIndices[usLayoutName] = 1;
+    layoutNamesByIndex[0] = defaultLayoutName;
+    if (alternativeLayoutName && alternativeLayoutName !== defaultLayoutName) {
+        layoutIndices[alternativeLayoutName] = 1;
+        layoutNamesByIndex[1] = alternativeLayoutName;
+    } else if (!alternativeLayoutName) {
+        alternativeLayoutName = defaultLayoutName;
     }
     layoutCount = Object.keys(layoutIndices).length;
 }
 
 function loadConfig() {
-    usApps = parseAppList(readConfig("UsApps", DEFAULT_US_APPS));
-    defaultLayoutName = String(readConfig("DefaultLayout", "tr")).trim().toLowerCase() || "tr";
-    usLayoutName = String(readConfig("UsLayout", "us")).trim().toLowerCase() || "us";
+    alternativeApps = parseAppList(
+        readConfigWithLegacy("AlternativeApps", "UsApps", DEFAULT_ALTERNATIVE_APPS)
+    );
+    defaultLayoutName = String(readConfig("DefaultLayout", "")).trim().toLowerCase();
+    alternativeLayoutName = String(
+        readConfigWithLegacy("AlternativeLayout", "UsLayout", "")
+    )
+        .trim()
+        .toLowerCase();
 
-    // Ready immediately with LayoutList-order fallback (tr,us → 0,1)
-    applyFallbackIndices();
-    layoutsReady = true;
+    // Wait for getLayoutsList so empty fields can mean first/second layout.
+    // If the user set explicit names, we can apply before the reply arrives.
+    if (defaultLayoutName && alternativeLayoutName) {
+        applyNamedFallbackIndices();
+        layoutsReady = true;
+    } else {
+        layoutsReady = false;
+    }
 
     refreshLayoutIndices(function () {
         applyForWindow(workspace.activeWindow);
@@ -80,6 +122,7 @@ function refreshLayoutIndices(done) {
         "getLayoutsList",
         function (layouts) {
             const next = {};
+            const byIndex = [];
             let count = 0;
 
             if (layouts && layouts.length !== undefined) {
@@ -87,6 +130,7 @@ function refreshLayoutIndices(done) {
                     const name = shortNameFromEntry(layouts[i]);
                     if (name) {
                         next[name] = i;
+                        byIndex[i] = name;
                         count += 1;
                     }
                 }
@@ -94,12 +138,14 @@ function refreshLayoutIndices(done) {
 
             if (count > 0) {
                 layoutIndices = next;
+                layoutNamesByIndex = byIndex;
                 layoutCount = count;
+                resolveLayoutNames();
             } else {
-                applyFallbackIndices();
+                applyNamedFallbackIndices();
             }
 
-            layoutsReady = true;
+            layoutsReady = indexForLayout(defaultLayoutName) >= 0;
             print(
                 "keyboard-layout-switcher: layouts ready count=" +
                     layoutCount +
@@ -107,10 +153,10 @@ function refreshLayoutIndices(done) {
                     defaultLayoutName +
                     "@" +
                     indexForLayout(defaultLayoutName) +
-                    " us=" +
-                    usLayoutName +
+                    " alternative=" +
+                    alternativeLayoutName +
                     "@" +
-                    indexForLayout(usLayoutName)
+                    indexForLayout(alternativeLayoutName)
             );
 
             if (typeof done === "function") {
@@ -210,7 +256,7 @@ function isSpecialWindow(window) {
     return false;
 }
 
-function windowMatchesUsApps(window) {
+function windowMatchesAlternativeApps(window) {
     const resourceClass = window.resourceClass
         ? String(window.resourceClass).toLowerCase()
         : "";
@@ -218,10 +264,10 @@ function windowMatchesUsApps(window) {
         ? String(window.resourceName).toLowerCase()
         : "";
 
-    if (resourceClass && Object.prototype.hasOwnProperty.call(usApps, resourceClass)) {
+    if (resourceClass && Object.prototype.hasOwnProperty.call(alternativeApps, resourceClass)) {
         return true;
     }
-    if (resourceName && Object.prototype.hasOwnProperty.call(usApps, resourceName)) {
+    if (resourceName && Object.prototype.hasOwnProperty.call(alternativeApps, resourceName)) {
         return true;
     }
     return false;
@@ -232,8 +278,8 @@ function applyForWindow(window) {
         return;
     }
 
-    const useUs = windowMatchesUsApps(window);
-    const targetName = useUs ? usLayoutName : defaultLayoutName;
+    const useAlternative = windowMatchesAlternativeApps(window);
+    const targetName = useAlternative ? alternativeLayoutName : defaultLayoutName;
     const index = indexForLayout(targetName);
     if (index < 0) {
         print(
