@@ -17,6 +17,7 @@ let layoutIndices = {}; // shortName -> index
 let layoutNamesByIndex = [];
 let layoutCount = 0;
 let lastAppliedIndex = -1;
+let pendingIndex = -1;
 let layoutsReady = false;
 let switching = false;
 
@@ -174,25 +175,50 @@ function indexForLayout(name) {
     return -1;
 }
 
-function setLayoutIndex(targetIndex) {
-    if (targetIndex < 0 || switching) {
+function finishSwitching() {
+    switching = false;
+    if (pendingIndex < 0) {
         return;
     }
+    const next = pendingIndex;
+    pendingIndex = -1;
+    if (next !== lastAppliedIndex) {
+        setLayoutIndex(next);
+    }
+}
+
+function setLayoutIndex(targetIndex) {
+    if (targetIndex < 0) {
+        return;
+    }
+
+    // While a switch is in flight, remember the latest desired layout.
+    // Dropping these requests made quick Alt-Tab (e.g. to Konsole) miss updates.
+    if (switching) {
+        pendingIndex = targetIndex;
+        return;
+    }
+
     if (targetIndex === lastAppliedIndex) {
         return;
     }
 
     switching = true;
+    const desired = targetIndex;
     callDBus(
         "org.kde.keyboard",
         "/Layouts",
         "org.kde.KeyboardLayouts",
         "getLayout",
         function (current) {
+            // A newer focus target may have arrived while getLayout was in flight
+            const goal = pendingIndex >= 0 ? pendingIndex : desired;
+            pendingIndex = -1;
+
             let cur = Number(current);
-            if (cur === targetIndex) {
-                lastAppliedIndex = targetIndex;
-                switching = false;
+            if (cur === goal) {
+                lastAppliedIndex = goal;
+                finishSwitching();
                 return;
             }
 
@@ -200,12 +226,26 @@ function setLayoutIndex(targetIndex) {
             let steps = 0;
 
             function step() {
+                const activeGoal = pendingIndex >= 0 ? pendingIndex : goal;
+                if (pendingIndex >= 0) {
+                    pendingIndex = -1;
+                }
+
+                if (cur === activeGoal) {
+                    lastAppliedIndex = activeGoal;
+                    print(
+                        "keyboard-layout-switcher: switched to index " + activeGoal
+                    );
+                    finishSwitching();
+                    return;
+                }
+
                 if (steps >= maxSteps) {
                     print(
                         "keyboard-layout-switcher: failed to reach layout index " +
-                            targetIndex
+                            activeGoal
                     );
-                    switching = false;
+                    finishSwitching();
                     return;
                 }
                 steps += 1;
@@ -222,16 +262,7 @@ function setLayoutIndex(targetIndex) {
                             "getLayout",
                             function (value) {
                                 cur = Number(value);
-                                if (cur === targetIndex) {
-                                    lastAppliedIndex = targetIndex;
-                                    switching = false;
-                                    print(
-                                        "keyboard-layout-switcher: switched to index " +
-                                            targetIndex
-                                    );
-                                } else {
-                                    step();
-                                }
+                                step();
                             }
                         );
                     }
