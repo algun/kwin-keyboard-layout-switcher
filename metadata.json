@@ -12,7 +12,7 @@
         "Id": "keyboard-layout-switcher",
         "License": "MIT",
         "Name": "Keyboard Layout Switcher",
-        "Version": "1.1.0",
+        "Version": "1.0.0",
         "Website": "https://github.com/algun/kwin-keyboard-layout-switcher"
     },
     "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",

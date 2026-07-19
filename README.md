@@ -1,18 +1,38 @@
 # Keyboard Layout Switcher
 
-KWin script for KDE Plasma 6 that switches the keyboard layout based on the active application:
+Per-app keyboard layout switching for **KDE Plasma 6 / KWin 6**.
+
+Automatically switches between a **default** and an **alternative** layout based on the focused window — useful if you type in one language day-to-day but want QWERTY/`us` (or another layout) in terminals, editors, and browsers.
 
 - **Listed apps** → alternative layout (e.g. `us`)
-- **Everything else** → default layout (e.g. `de`, `tr`, `fr`, …)
+- **Everything else** → default layout (e.g. `de`, `tr`, `fr`, `ru`, …)
 
 Configure the app list and layout short names from System Settings — no code edits required.
 
+## Works on
+
+Any Linux desktop running **Plasma 6** with **KWin**, including:
+
+| Distro | Notes |
+|--------|--------|
+| [KDE neon](https://neon.kde.org/) | Upstream Plasma reference |
+| [Fedora KDE](https://fedoraproject.org/spins/kde/) / Kinoite | Fedora’s official KDE spin |
+| [Kubuntu](https://kubuntu.org/) | Ubuntu + Plasma |
+| [openSUSE Tumbleweed](https://www.opensuse.org/) | Rolling Plasma 6 |
+| [Arch Linux](https://archlinux.org/) | `plasma-desktop` / `kwin` |
+| [CachyOS](https://cachyos.org/) | Arch-based, KDE edition |
+| [EndeavourOS](https://endeavouros.com/) | Arch-based, Plasma option |
+| [Manjaro KDE](https://manjaro.org/) | Arch-based |
+| [Garuda Linux](https://garudalinux.org/) | KDE Dragonized / similar |
+| [NixOS](https://nixos.org/) | `services.desktopManager.plasma6` |
+| [Debian](https://www.debian.org/) | Plasma 6 on Testing/Sid (and newer stable when available) |
+
+Wayland and X11 sessions are both fine as long as KWin is the window manager.
+
 ## Prerequisites
 
-1. Plasma / KWin 6
+1. Plasma / KWin 6 (see distros above)
 2. At least two layouts under **System Settings → Keyboard → Layouts**
-3. Set **Switching Policy** to **Global**  
-   (Application/Window policy remembers layouts per app and can fight this script)
 
 Example `~/.config/kxkbrc`:
 
@@ -69,13 +89,36 @@ Or from a KWin console (`plasma-interactiveconsole --kwin`):
 print(workspace.activeWindow.resourceClass)
 ```
 
+## Releasing
+
+GitHub Actions builds the `.kwinscript` and publishes a GitHub Release when you push a version tag that matches `metadata.json`:
+
+1. Bump `KPlugin.Version` in [`metadata.json`](metadata.json) (e.g. `1.2.0`)
+2. Commit that change
+3. Tag and push:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+The workflow packages `metadata.json`, `contents/`, `LICENSE`, and `README.md` into `keyboard-layout-switcher-1.2.0.kwinscript`.
+
+Local package smoke-test:
+
+```bash
+./scripts/package.sh
+```
+
+**KDE Store:** still manual — download the release asset and upload it at [store.kde.org](https://store.kde.org) under Plasma → KWin Scripts. There is no public Store upload API to automate.
+
 ## Troubleshooting
 
 - **Layout never changes:** short names must match configured layouts:
   ```bash
   qdbus6 org.kde.keyboard /Layouts org.kde.KeyboardLayouts.getLayoutsList
   ```
-- **Wrong layout sticks after focus change:** set Switching Policy to **Global**
+- **Wrong layout sticks after focus change:** confirm the window’s `resourceClass` is in the alternative-apps list (or not, for default layout)
 - **Is the script loaded?**
   ```bash
   qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded keyboard-layout-switcher
