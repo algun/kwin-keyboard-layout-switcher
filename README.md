@@ -91,18 +91,26 @@ print(workspace.activeWindow.resourceClass)
 
 ## Releasing
 
-GitHub Actions builds the `.kwinscript` and publishes a GitHub Release when you push a version tag that matches `metadata.json`:
+Releases are automated via GitHub Actions.
 
-1. Bump `KPlugin.Version` in [`metadata.json`](metadata.json) (e.g. `1.2.0`)
-2. Commit that change
-3. Tag and push:
+### Fully automatic (recommended)
+
+1. Bump `KPlugin.Version` in [`metadata.json`](metadata.json) (e.g. `1.0.2`)
+2. Commit and push to `master`
+
+The **Tag release** workflow creates `v<version>` from `metadata.json`, then the **Release** workflow builds and publishes the `.kwinscript`.
+
+### Manual tag (also works)
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+# metadata.json version must match the tag (without the v prefix)
+git tag v1.0.2
+git push origin v1.0.2
 ```
 
-The workflow packages `metadata.json`, `contents/`, `LICENSE`, and `README.md` into `keyboard-layout-switcher-1.2.0.kwinscript`.
+### Fallback
+
+Actions → **Release** → Run workflow → enter an existing tag (e.g. `v1.0.1`).
 
 Local package smoke-test:
 

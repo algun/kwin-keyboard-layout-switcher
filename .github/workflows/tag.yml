@@ -1,0 +1,49 @@
+name: Tag release
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - metadata.json
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag from metadata version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r '.KPlugin.Version' metadata.json)"
+          TAG="v${VERSION}"
+
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::metadata.json has no KPlugin.Version"
+            exit 1
+          fi
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally at $(git rev-parse "$TAG")"
+            exit 0
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on remote"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Keyboard Layout Switcher ${VERSION}"
+          git push origin "$TAG"
+          echo "Pushed $TAG — release workflow will run automatically"
