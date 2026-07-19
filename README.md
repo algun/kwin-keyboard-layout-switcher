@@ -98,7 +98,7 @@ Releases are automated via GitHub Actions.
 1. Bump `KPlugin.Version` in [`metadata.json`](metadata.json) (e.g. `1.0.2`)
 2. Commit and push to `master`
 
-The **Tag release** workflow creates `v<version>` from `metadata.json`, then the **Release** workflow builds and publishes the `.kwinscript`.
+The **Tag release** workflow creates `v<version>` from `metadata.json`, then the **Publish** workflow builds and publishes the `.kwinscript`.
 
 ### Manual tag (also works)
 
@@ -110,7 +110,7 @@ git push origin v1.0.2
 
 ### Fallback
 
-Actions → **Release** → Run workflow → enter an existing tag (e.g. `v1.0.1`).
+Actions → **Publish** → Run workflow → enter an existing tag (e.g. `v1.0.2`).
 
 Local package smoke-test:
 
