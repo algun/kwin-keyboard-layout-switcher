@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to release (e.g. v1.1.0)"
+        description: "Existing tag to release (e.g. v1.0.0)"
         required: true
         type: string
 
@@ -18,81 +18,71 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ref=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ steps.ref.outputs.ref }}
 
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y jq zip
 
-      - name: Resolve tag and metadata
+      - name: Verify version and package
         id: meta
         env:
-          TAG_NAME: ${{ inputs.tag || github.ref_name }}
+          TAG_NAME: ${{ steps.ref.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${TAG_NAME}"
-          VERSION="${TAG#v}"
+          VERSION="${TAG_NAME#v}"
           META_VERSION="$(jq -r '.KPlugin.Version' metadata.json)"
           PLUGIN_ID="$(jq -r '.KPlugin.Id' metadata.json)"
           NAME="$(jq -r '.KPlugin.Name' metadata.json)"
           ARTIFACT="${PLUGIN_ID}-${VERSION}.kwinscript"
 
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "plugin_id=$PLUGIN_ID" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
 
-          echo "tag=$TAG meta_version=$META_VERSION"
-          if [[ "$META_VERSION" != "$VERSION" ]]; then
+          if [ "$META_VERSION" != "$VERSION" ]; then
             echo "::error::metadata.json Version ($META_VERSION) must match tag version ($VERSION)"
             exit 1
           fi
 
-      - name: Package .kwinscript
-        run: |
           chmod +x scripts/package.sh
-          ./scripts/package.sh "${{ steps.meta.outputs.artifact }}"
+          ./scripts/package.sh "$ARTIFACT"
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ref.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }} ${{ steps.meta.outputs.version }}
+          files: ${{ steps.meta.outputs.artifact }}
+          generate_release_notes: true
+          body: |
+            Install from this release:
+
+            1. Download `${{ steps.meta.outputs.artifact }}`
+            2. System Settings → Window Management → KWin Scripts → Install from File…
+            3. Enable the script and open **Configure** to set alternative-layout apps
+
+            Or:
+
+            ```bash
+            kpackagetool6 --type=KWin/Script --install ${{ steps.meta.outputs.artifact }}
+            kwriteconfig6 --file kwinrc --group Plugins --key keyboard-layout-switcherEnabled true
+            qdbus6 org.kde.KWin /KWin reconfigure
+            ```
+
+            Upload the same `.kwinscript` to [KDE Store](https://store.kde.org) under Plasma → KWin Scripts if you want Store discovery.
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.meta.outputs.tag }}
-          VERSION: ${{ steps.meta.outputs.version }}
-          NAME: ${{ steps.meta.outputs.name }}
-          ARTIFACT: ${{ steps.meta.outputs.artifact }}
-        run: |
-          set -euo pipefail
-          NOTES="$(cat <<EOF
-          ## ${NAME} ${VERSION}
-
-          Install from this release:
-
-          1. Download \`${ARTIFACT}\`
-          2. System Settings → Window Management → KWin Scripts → Install from File…
-          3. Enable the script and open **Configure** to set alternative-layout apps
-
-          Or:
-
-          \`\`\`bash
-          kpackagetool6 --type=KWin/Script --install ${ARTIFACT}
-          kwriteconfig6 --file kwinrc --group Plugins --key keyboard-layout-switcherEnabled true
-          qdbus6 org.kde.KWin /KWin reconfigure
-          \`\`\`
-
-          ### Notes
-          - Plasma / KWin 6
-          - Upload the same \`.kwinscript\` to [KDE Store](https://store.kde.org) (manual; no public upload API)
-          EOF
-          )"
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ARTIFACT" --clobber
-            gh release edit "$TAG" --notes "$NOTES"
-          else
-            gh release create "$TAG" "$ARTIFACT" \
-              --title "${NAME} ${VERSION}" \
-              --notes "$NOTES"
-          fi
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
